@@ -15,8 +15,10 @@
 (defn get-parameters
   [my-string]
   (let [predicative (re-find #"^[a-zA-Z]+\([^)]+\)" my-string)]
-    ( if ( = predicative nil) nil
-      (re-seq #"[a-zA-Z]+" (str (re-seq #"\([^)]+\)" predicative))))))
+    (cond
+      (= predicative nil ) nil
+      :else (re-seq #"[a-zA-Z]+" (str (re-seq #"\([^)]+\)" predicative))))
+    ))
 
 (defn get-base-roule
   [query]
@@ -83,11 +85,16 @@
 (defn execute-query
   [database query]
   (let [facts (set (get-facts database))]
-    (if (contains? facts query) true
-      (evaluate database query))))
+    (cond
+      (contains? facts query) true
+      :else (evaluate database query)
+      )))
 
 (defn evaluate-query
   "Returns true if the rules and facts in database imply query, false if not. If
   either input can't be parsed, returns nil"
   [database query]
-  (if (or (invalid-query? query) (invalid-database? database)) nil (execute-query database query)))
+  (cond
+    (or (invalid-query? query) (invalid-database? database)) nil
+    :else (execute-query database query)
+    ))
