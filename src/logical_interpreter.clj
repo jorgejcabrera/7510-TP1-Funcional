@@ -4,8 +4,10 @@
 (require '[clojure.set :as set])
 
 (defn replace-value
-  [roule old-value new-value]
-  (str/replace roule (re-pattern (str old-value)) new-value))
+  "Replace new-value for old-value in intput string.
+  Example: [old-value x ; new-value juan ; hijo(x,y) :- varon(x), padre(y,x)] -> hijo(juan,y) :- varon(juan), padre(y,juan)."
+  [rule old-value new-value]
+  (str/replace rule (re-pattern (str old-value)) new-value))
 
 (defn build-pattern
   "Returns a regex pattern from input string."
@@ -13,6 +15,8 @@
   (re-pattern (str "(?i)" my-string)))
 
 (defn get-parameters
+  "Return the parameter from input string.
+  Example: padre(x, y) -> ('x' 'y')."
   [my-string]
   (let [predicative (re-find #"^[a-zA-Z]+\([^)]+\)" my-string)]
     (cond
@@ -20,34 +24,40 @@
       :else (re-seq #"[a-zA-Z]+" (str (re-seq #"\([^)]+\)" predicative))))
     ))
 
-(defn get-base-roule
+(defn get-base-rule
+  "Return the relation or base rule from query.
+  Example: padre(jorge, juan) -> padre."
   [query]
-  (first (re-seq #"[a-zA-Z]+[^\(\),]*" query)))
+  (first (re-seq #"[a-zA-Z]+[^(),]*" query)))
 
 (defn get-facts
-  "Returns all the facts from the rows"
+  "Returns all the facts from the database. All the valid facts must be in lowercase.
+  Example: varon(juan) -> valid
+           varon(JUAN) -> invalid."
   [database]
-  (re-seq #"[a-z]+\([^()]+\)" database))
+  (re-seq #"[a-z]+\([a-z, ]+\)" database))
 
-(defn get-roules
-  "Returns all the roules from the rows"
+(defn get-rules
+  "Returns all the rules from the database."
   [database]
   (re-seq #"[a-z]+\([^()]+\)[ ]*:-.*\." database))
 
-(defn get-roule
-  [roules query]
-  ( let [base-roule (get-base-roule query)]
-    (re-find (re-pattern (str base-roule "[^.]+")) (str roules))))
+(defn get-rule
+  "Return the reoule that match with my query.
+  Example: hijo(jorge,juan) -> hijo(X, Y) :- varon(X), padre(Y, X)"
+  [rules query]
+  ( let [base-rule (get-base-rule query)]
+    (re-find (re-pattern (str base-rule "[^.]+")) (str rules))))
 
-(defn get-facts-for-roule
+(defn load-facts-for-rule
   "Return all the facts to find from a query."
-  [roules query ]
-  (def new-roule (get-roule roules query))
-  (let [roule-parameters (get-parameters new-roule)
+  [rules query ]
+  (def new-rule (get-rule rules query))
+  (let [rule-parameters (get-parameters new-rule)
         query-parameters (get-parameters query)]
-    (doseq [parameter roule-parameters]
-      (def position (.indexOf roule-parameters parameter))
-      (def new-roule (replace-value new-roule parameter (nth query-parameters position))))))
+    (doseq [parameter rule-parameters]
+      (def position (.indexOf rule-parameters parameter))
+      (def new-rule (replace-value new-rule parameter (nth query-parameters position))))))
 
 (defn invalid-query?
   "Returns true if query has invalid format."
@@ -61,25 +71,25 @@
 
 (defn exist-base-rule?
   "Return true if base rule does not exist."
-  [roules base-rule]
-  (if (re-find (build-pattern base-rule) (str roules)) true false))
+  [rules base-rule]
+  (if (re-find (build-pattern base-rule) (str rules)) true false))
 
-(defn evaluate-roule
-  [roules facts query]
-  (get-facts-for-roule roules query)
-  (let [new-facts (re-seq #"[a-zA-Z]+\([^)]+\)" (str (re-seq #"[^:-]+$" new-roule)))]
+(defn evaluate-rule
+  [rules facts query]
+  (load-facts-for-rule rules query)
+  (let [new-facts (re-seq #"[a-zA-Z]+\([^)]+\)" (str (re-seq #"[^:-]+$" new-rule)))]
     (set/subset? (set new-facts) (set facts))))
 
 (defn evaluate
-  "Return nil if base rule has invalid format, or if it does not exist. "
+  "Return nil if base rule has invalid format, or if it does not exist."
   [database query]
   (let [facts (set (get-facts database))
-        roules (set (get-roules database))
-        base_roule (get-base-roule query)]
+        rules (set (get-rules database))
+        base_rule (get-base-rule query)]
     (cond
-      (= base_roule nil) nil
-      (= (exist-base-rule? roules base_roule ) false ) nil
-      :else (evaluate-roule roules facts query)
+      (= base_rule nil) nil
+      (= (exist-base-rule? rules base_rule ) false ) nil
+      :else (evaluate-rule rules facts query)
       )))
 
 (defn execute-query
